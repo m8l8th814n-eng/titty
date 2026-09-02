@@ -22,6 +22,60 @@ void pty_resize(int fd, int cols, int rows, int px, int py) {
     ioctl(fd, TIOCSWINSZ, &ws);
 }
 
+static const char *const env_prefixes[] = {
+    "KITTY_", "ALACRITTY_", "WEZTERM_", "KONSOLE_", "GHOSTTY_", "CONTOUR_",
+    "ITERM_", "VTE_", "TERMUX_", NULL
+};
+
+static const char *const env_exact[] = {
+    "TERMINFO", "TERMINFO_DIRS", "TERM_PROGRAM_VERSION", "WINDOWID",
+    "COLORFGBG", "LC_TERMINAL", "LC_TERMINAL_VERSION", "ITERM_SESSION_ID",
+    "ITERM_PROFILE", "VTE_VERSION", NULL
+};
+
+extern char **environ;
+
+static void clean_env(void) {
+    char **names = NULL;
+    size_t n = 0, cap = 0;
+
+    for (char **e = environ; e && *e; e++) {
+        const char *eq = strchr(*e, '=');
+        if (!eq) continue;
+        size_t len = (size_t)(eq - *e);
+
+        bool drop = false;
+        for (int i = 0; env_prefixes[i]; i++) {
+            size_t pl = strlen(env_prefixes[i]);
+            if (len > pl && !strncmp(*e, env_prefixes[i], pl)) { drop = true; break; }
+        }
+        if (!drop) {
+            for (int i = 0; env_exact[i]; i++)
+                if (len == strlen(env_exact[i]) && !strncmp(*e, env_exact[i], len)) {
+                    drop = true;
+                    break;
+                }
+        }
+        if (!drop) continue;
+
+        if (n == cap) {
+            cap = cap ? cap * 2 : 16;
+            char **nn = realloc(names, cap * sizeof *nn);
+            if (!nn) break;
+            names = nn;
+        }
+        names[n] = strndup(*e, len);
+        if (!names[n]) break;
+        n++;
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        unsetenv(names[i]);
+        free(names[i]);
+    }
+    free(names);
+}
+
 static const char *pick_shell(void) {
     if (SHELL_OVERRIDE[0]) return SHELL_OVERRIDE;
     const char *s = getenv("SHELL");
@@ -47,6 +101,7 @@ int pty_spawn(int cols, int rows, char *const argv[]) {
     }
 
     if (pid == 0) {
+        if (CLEAN_ENV) clean_env();
         setenv("TERM", TERM_NAME, 1);
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM_PROGRAM", "titty", 1);
