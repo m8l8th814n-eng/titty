@@ -59,7 +59,7 @@
 #define SERVER_DECORATION 1
 
 #define BG_OPACITY        0.80
-#define BG_OPACITY_MATCH  1
+#define BG_OPACITY_MATCH  0
 #define FX_BLUR           1
 #define FX_BLUR_REGION    1
 
@@ -82,6 +82,7 @@
 #define SCROLLBACK_LINES  10000
 #define GLYPH_ATLAS_SIZE  2048
 #define TERM_NAME         "xterm-256color"
+#define CLEAN_ENV         1
 #define SHELL_OVERRIDE    ""
 #define BOLD_IS_BRIGHT    1
 #define CURSOR_SHAPE      0
