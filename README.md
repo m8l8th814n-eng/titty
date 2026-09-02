@@ -11,3 +11,5 @@ bat Makefile
 make 
 make install
 
+titty
+ctrl+shift+F (bat shit mode)
