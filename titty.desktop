@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=titty
+GenericName=Terminal
+Comment=GPU-accelererad terminal för wayland
+TryExec=titty
+Exec=titty
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;commandline;terminal;
+X-TerminalArgExec=-e

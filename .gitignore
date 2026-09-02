@@ -1,0 +1,16 @@
+titty
+titty-crt
+titty-neon
+titty-frost
+titty-flat
+*.o
+proto/
+titty.h
+titty.h.crt
+titty.h.neon
+titty.h.frost
+titty.h.flat
+titty.profdata
+.pgo/
+__pycache__/
+*.pyc

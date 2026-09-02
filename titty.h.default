@@ -1,0 +1,174 @@
+#ifndef TITTY_H
+#define TITTY_H
+
+#define FONT_REGULAR      "IosevkaTerm Nerd Font Mono:style=Regular"
+#define FONT_BOLD         "IosevkaTerm Nerd Font Mono:style=Bold"
+#define FONT_ITALIC       "IosevkaTerm Nerd Font Mono:style=Italic"
+#define FONT_BOLD_ITALIC  "IosevkaTerm Nerd Font Mono:style=Bold Italic"
+#define FONT_SIZE         14.0
+#define FONT_SIZE_STEP    1.0
+#define FONT_SIZE_MIN     6.0
+#define FONT_SIZE_MAX     72.0
+#define FONT_DPI          96.0
+#define LINE_HEIGHT       0.96
+#define CELL_HEIGHT_MODE  0
+#define CELL_WIDTH        1.00
+#define CELL_ASPECT       0.0
+#define GLYPH_X_OFFSET    0
+#define GLYPH_Y_OFFSET    0
+
+#define FONT_AA           2
+#define FONT_HINTING      1
+#define FONT_SUBPIXEL_BGR 0
+#define FONT_LCD_FILTER   1
+#define FONT_EMBOLDEN     0.09
+#define TEXT_GAMMA        1.00
+#define TEXT_CONTRAST     0.10
+
+#define COLOR_BG          0x000000
+#define COLOR_FG          0x323a55
+#define COLOR_CURSOR      0x7183c0
+#define COLOR_CURSOR_TEXT 0x000000
+#define COLOR_SELECT_BG   0x7183c0
+#define COLOR_SELECT_FG   0x000000
+#define COLOR_BORDER      0x000000
+
+#define COLOR_0           0x000000
+#define COLOR_1           0x0f7fff
+#define COLOR_2           0x78cc8d
+#define COLOR_3           0xccc578
+#define COLOR_4           0x7183c0
+#define COLOR_5           0x6373a9
+#define COLOR_6           0x96aeff
+#define COLOR_7           0x323a55
+#define COLOR_8           0x000000
+#define COLOR_9           0x288dff
+#define COLOR_10          0xa7f2ba
+#define COLOR_11          0xf2eca7
+#define COLOR_12          0x9fafe6
+#define COLOR_13          0x8e9dcf
+#define COLOR_14          0xafc2ff
+#define COLOR_15          0xffffff
+
+#define INNER_BORDER      25
+
+#define WINDOW_COLS       100
+#define WINDOW_ROWS       30
+#define WINDOW_TITLE      "titty"
+#define WINDOW_APP_ID     "titty"
+#define SERVER_DECORATION 1
+
+#define BG_OPACITY        0.80
+#define BG_OPACITY_MATCH  1
+#define FX_BLUR           1
+#define FX_BLUR_REGION    1
+
+#define FX_FROST          1
+#define FX_FROST_AMOUNT   0.95
+#define FX_FROST_GRAIN    0.055
+#define FX_FROST_SCALE    1.7
+#define FX_FROST_TINT     0xa8c7ff
+#define FX_FROST_TINT_AMT 0.07
+#define FX_FROST_SHEEN    0.09
+#define FX_FROST_EDGE     0.35
+
+#define BIND_FONT_INC     "ctrl+shift+plus,ctrl+shift+equal,ctrl+shift+KP_Add"
+#define BIND_FONT_DEC     "ctrl+shift+minus,ctrl+shift+KP_Subtract"
+#define BIND_NEW_WINDOW   "ctrl+shift+Return"
+#define BIND_COPY         "ctrl+shift+c"
+#define BIND_PASTE        "ctrl+shift+v"
+#define BIND_TOGGLE_CRT   "ctrl+shift+f"
+
+#define SCROLLBACK_LINES  10000
+#define GLYPH_ATLAS_SIZE  2048
+#define TERM_NAME         "xterm-256color"
+#define SHELL_OVERRIDE    ""
+#define BOLD_IS_BRIGHT    1
+#define CURSOR_SHAPE      0
+#define CURSOR_BLINK      0
+#define CURSOR_BLINK_MS   500
+#define BELL_FLASH        0
+
+#define CURSOR_TRAIL_DECAY    0.055
+#define CURSOR_TRAIL_START    0.4
+#define CURSOR_TRAIL_OPACITY  0.75
+#define CURSOR_TRAIL_COLOR    COLOR_CURSOR
+
+#define CRT_OVERLAY           1
+#define CRT_START_ON          0
+#define CRT_INTRO             1
+#define CRT_INTRO_HOLD_MS     700
+#define CRT_FADE_MS           1100
+#define CRT_SCANLINES         0.60
+#define CRT_SCANLINE_PERIOD   3.0
+#define CRT_GLOW              2.80
+#define CRT_BURN_IN           0.90
+#define CRT_CHROMATIC         0.011
+#define CRT_NOISE             0.095
+#define CRT_FLICKER           0.055
+#define CRT_VIGNETTE          0.80
+#define CRT_TINT              0x9fffcf
+#define CRT_TINT_AMOUNT       0.00
+
+#define FX_GLOW           1
+#define FX_GLOW_STRENGTH  0.42
+#define FX_GLOW_THRESHOLD 0.42
+#define FX_GLOW_FALLOFF   0.70
+#define FX_GLOW_RADIUS    3
+#define FX_GLOW_COLOR     0x7183c0
+#define FX_GLOW_TINT      0.00
+#define FX_GLOW_UNDER     1.00
+
+#define FX_SCANLINES          1
+#define FX_SCANLINE_STRENGTH  0.05
+#define FX_SCANLINE_PERIOD    2.0
+
+#define FX_DISTORT_TEXT       0
+
+#define FX_CURVATURE          0
+#define FX_CURVATURE_AMOUNT   0.020
+
+#define FX_GHOST_LAYERS       0
+#define FX_GHOST_SOFTNESS     1
+#define FX_GHOST_PROTECT      1.00
+#define FX_GHOST_DENSITY      4.00
+#define FX_GHOST_UNDER        1.00
+
+#define FX_GHOST1_CURVE       0.030
+#define FX_GHOST1_CHROMATIC   14.0
+#define FX_GHOST1_SCALE       1.004
+#define FX_GHOST1_OFFSET_X    0.0
+#define FX_GHOST1_OFFSET_Y    0.0
+#define FX_GHOST1_OPACITY     4.00
+
+#define FX_GHOST2_CURVE       0.080
+#define FX_GHOST2_CHROMATIC   0.55
+#define FX_GHOST2_SCALE       1.012
+#define FX_GHOST2_OFFSET_X    0.0
+#define FX_GHOST2_OFFSET_Y    0.0
+#define FX_GHOST2_OPACITY     1.50
+
+#define FX_CHROMATIC          1
+#define FX_CHROMATIC_AMOUNT   0.0011
+
+#define FX_VIGNETTE           1
+#define FX_VIGNETTE_AMOUNT    0.14
+
+#define FX_NOISE              1
+#define FX_NOISE_AMOUNT       0.020
+#define FX_NOISE_ANIMATE      0
+
+#define FX_FLICKER            0
+#define FX_FLICKER_AMOUNT     0.025
+
+#define FX_BURN_IN            1
+#define FX_BURN_IN_AMOUNT     0.28
+
+#define FX_LIFT               0.000
+#define FX_GAMMA              1.00
+#define FX_MIN_CONTRAST       1.00
+#define FX_CONTRAST           1.00
+#define FX_SATURATION         1.06
+#define FX_BRIGHTNESS         1.00
+
+#endif
