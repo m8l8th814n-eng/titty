@@ -265,15 +265,11 @@ install: titty
 	    rm -f $(APPDIR)/titty-$$v.desktop.tmp; \
 	  fi; \
 	done
-	install -Dm755 alacritty_convert.py $(DOCDIR)/alacritty_convert.py
-	install -Dm755 kitty_convert.py $(DOCDIR)/kitty_convert.py
-	install -Dm644 titty_config.py $(DOCDIR)/titty_config.py
 	install -Dm644 titty.h $(DOCDIR)/titty.h
 	@for v in $(VARIANTS); do \
 	  install -Dm644 presets/$$v.h $(DOCDIR)/presets/$$v.h; \
 	  test -f titty.h.$$v && install -Dm644 titty.h.$$v $(DOCDIR)/titty.h.$$v || true; \
 	done
-	install -Dm755 preset_merge.py $(DOCDIR)/preset_merge.py
 	@test -f titty.h.default && install -Dm644 titty.h.default $(DOCDIR)/titty.h.default || true
 	@command -v update-desktop-database >/dev/null 2>&1 && \
 	  update-desktop-database -q $(APPDIR) 2>/dev/null || true
