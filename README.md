@@ -4,7 +4,7 @@ suck less than kitty but way cooler. thIS iS yOur nEw G0At.
 
 light robust optimized.
 
-git clone http://github.com/m8l8th814-eng/titty
+git clone https://github.com/m8l8th814n-eng/titty
 
 bat Makefile
 
