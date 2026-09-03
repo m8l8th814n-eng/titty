@@ -177,7 +177,14 @@ titty.h:
 	cp titty.h.default $@
 	@echo "titty.h skapad från titty.h.default - redigera den och kör make igen"
 
-$(OBJ): $(PROTO_H) titty.h common.h
+config_defaults.h: titty.h.default
+	@awk '/^#define[ \t]+[A-Z0-9_]+/ { \
+	    name = $$2; \
+	    print "#ifndef " name; print $$0; print "#endif" ; next } \
+	    { next }' titty.h.default > $@
+	@echo "config_defaults.h genererad ur titty.h.default"
+
+$(OBJ): $(PROTO_H) titty.h common.h config_defaults.h
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -305,7 +312,7 @@ clean-obj:
 	rm -f $(OBJ)
 
 clean: clean-obj
-	rm -f titty $(addprefix titty-,$(VARIANTS)) titty.profdata
+	rm -f config_defaults.h titty $(addprefix titty-,$(VARIANTS)) titty.profdata
 	rm -rf proto $(PGODIR)
 
 .PHONY: all clean clean-obj install uninstall pgo gcc arm64 config variants configs batshit

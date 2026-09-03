@@ -10,6 +10,8 @@
 #include TITTY_PRESET
 #endif
 
+#include "config_defaults.h"
+
 #define COL_DEF_FG   0xFFFFFFFFu
 #define COL_DEF_BG   0xFFFFFFFEu
 #define COL_RGB(v)   (0x01000000u | ((uint32_t)(v) & 0x00FFFFFFu))
