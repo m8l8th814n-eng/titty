@@ -89,12 +89,19 @@ HAVE_KBLUR := $(if $(wildcard $(BLUR_XML)),1,0)
 PRIMSEL_XML = $(WLP)/unstable/primary-selection/primary-selection-unstable-v1.xml
 HAVE_PRIMSEL := $(if $(wildcard $(PRIMSEL_XML)),1,0)
 
+TEXTIN_XML = $(WLP)/unstable/text-input/text-input-unstable-v3.xml
+HAVE_TEXTIN := $(if $(wildcard $(TEXTIN_XML)),1,0)
+
 PROTO_H = proto/xdg-shell-client-protocol.h proto/xdg-decoration-client-protocol.h
 PROTO_C = proto/xdg-shell-protocol.c proto/xdg-decoration-protocol.c
 
 ifeq ($(HAVE_PRIMSEL),1)
 PROTO_H += proto/primary-selection-client-protocol.h
 PROTO_C += proto/primary-selection-protocol.c
+endif
+ifeq ($(HAVE_TEXTIN),1)
+PROTO_H += proto/text-input-client-protocol.h
+PROTO_C += proto/text-input-protocol.c
 endif
 
 ifeq ($(HAVE_EXTBG),1)
@@ -106,7 +113,7 @@ PROTO_H += proto/blur-client-protocol.h
 PROTO_C += proto/blur-protocol.c
 endif
 
-CFLAGS += -DHAVE_EXTBG=$(HAVE_EXTBG) -DHAVE_KBLUR=$(HAVE_KBLUR) -DHAVE_PRIMSEL=$(HAVE_PRIMSEL)
+CFLAGS += -DHAVE_EXTBG=$(HAVE_EXTBG) -DHAVE_KBLUR=$(HAVE_KBLUR) -DHAVE_PRIMSEL=$(HAVE_PRIMSEL) -DHAVE_TEXTIN=$(HAVE_TEXTIN)
 
 BIN ?= titty
 VARIANTS = crt neon frost flat
@@ -138,6 +145,14 @@ proto/ext-background-effect-client-protocol.h: $(EXTBG_XML)
 	$(SCANNER) client-header $< $@
 
 proto/ext-background-effect-protocol.c: $(EXTBG_XML)
+	@mkdir -p proto
+	$(SCANNER) private-code $< $@
+
+proto/text-input-client-protocol.h: $(TEXTIN_XML)
+	@mkdir -p proto
+	$(SCANNER) client-header $< $@
+
+proto/text-input-protocol.c: $(TEXTIN_XML)
 	@mkdir -p proto
 	$(SCANNER) private-code $< $@
 
@@ -241,6 +256,7 @@ config:
 	@echo "ext-bg-effect : $(if $(filter 1,$(HAVE_EXTBG)),ja,nej)"
 	@echo "kde-blur      : $(if $(filter 1,$(HAVE_KBLUR)),ja,nej)"
 	@echo "primarval     : $(if $(filter 1,$(HAVE_PRIMSEL)),ja,nej)"
+	@echo "text-input    : $(if $(filter 1,$(HAVE_TEXTIN)),ja,nej)"
 
 BINDIR  = $(DESTDIR)$(PREFIX)/bin
 SHAREDIR = $(DESTDIR)$(PREFIX)/share

@@ -79,6 +79,13 @@
 #define BIND_PASTE        "ctrl+shift+v"
 #define BIND_TOGGLE_CRT   "ctrl+shift+f"
 
+#define TOUCH_ENABLE          1
+#define TOUCH_PINCH_ZOOM      1
+#define TOUCH_PINCH_MIN_PX    24.0
+#define TOUCH_SCROLL          1
+#define TOUCH_SCROLL_SPEED    1.0
+#define TEXT_INPUT            1
+
 #define SCROLLBACK_LINES  10000
 #define GLYPH_ATLAS_SIZE  2048
 #define TERM_NAME         "xterm-256color"

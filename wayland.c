@@ -29,6 +29,9 @@
 #if HAVE_PRIMSEL
 #include "primary-selection-client-protocol.h"
 #endif
+#if HAVE_TEXTIN
+#include "text-input-client-protocol.h"
+#endif
 
 #include "common.h"
 
@@ -39,6 +42,19 @@ static struct xdg_wm_base *wm_base;
 static struct wl_seat *seat;
 static struct wl_keyboard *keyboard;
 static struct wl_pointer *pointer;
+static struct wl_touch *touch;
+#if HAVE_TEXTIN
+static struct zwp_text_input_manager_v3 *ti_mgr;
+static struct zwp_text_input_v3 *ti;
+static uint32_t ti_serial;
+static bool ti_enabled;
+static char ti_commit[4096];
+static int ti_commit_len;
+static uint32_t ti_delete_before, ti_delete_after;
+static void ti_enable(void);
+static void ti_disable(void);
+static void ti_update_cursor_rect(void);
+#endif
 static struct zxdg_decoration_manager_v1 *deco_mgr;
 static struct zxdg_toplevel_decoration_v1 *deco;
 #if HAVE_EXTBG
@@ -110,6 +126,15 @@ static int click_count;
 static int last_click_cell_x = -1, last_click_cell_y = -1;
 static bool ptr_down;
 static double ptr_x, ptr_y;
+
+#define MAX_TOUCH 2
+typedef struct { int32_t id; double x, y, sx, sy; bool active; } TouchPt;
+static TouchPt tpts[MAX_TOUCH];
+static int touch_n;
+static double pinch_ref_dist;
+static double pinch_ref_size;
+static bool pinching;
+static double touch_scroll_acc;
 
 static const char *MIME_UTF8 = "text/plain;charset=utf-8";
 static const char *MIME_PLAIN = "text/plain";
@@ -590,11 +615,18 @@ static void kb_keymap(void *d, struct wl_keyboard *k, uint32_t fmt, int32_t fd, 
 static void kb_enter(void *d, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s,
                      struct wl_array *keys) {
     last_serial = serial;
+#if HAVE_TEXTIN
+    if (TEXT_INPUT) ti_enable();
+#endif
     app.focused = true;
     app.need_draw = true;
 }
 
 static void kb_leave(void *d, struct wl_keyboard *k, uint32_t serial, struct wl_surface *s) {
+    last_serial = serial;
+#if HAVE_TEXTIN
+    if (TEXT_INPUT) ti_disable();
+#endif
     app.focused = false;
     repeat_armed = false;
     if (repeat_fd >= 0) {
@@ -872,6 +904,109 @@ static void ptr_axis(void *d, struct wl_pointer *p, uint32_t t, uint32_t axis, w
     }
 }
 
+static int touch_slot(int32_t id) {
+    for (int i = 0; i < MAX_TOUCH; i++)
+        if (tpts[i].active && tpts[i].id == id) return i;
+    return -1;
+}
+
+static double touch_dist(void) {
+    if (touch_n < 2) return 0.0;
+    double dx = tpts[0].x - tpts[1].x, dy = tpts[0].y - tpts[1].y;
+    return sqrt(dx * dx + dy * dy);
+}
+
+static void touch_down(void *d, struct wl_touch *t, uint32_t serial, uint32_t time,
+                       struct wl_surface *surf, int32_t id, wl_fixed_t x, wl_fixed_t y) {
+    last_serial = serial;
+    for (int i = 0; i < MAX_TOUCH; i++) {
+        if (tpts[i].active) continue;
+        tpts[i].active = true;
+        tpts[i].id = id;
+        tpts[i].x = tpts[i].sx = wl_fixed_to_double(x);
+        tpts[i].y = tpts[i].sy = wl_fixed_to_double(y);
+        touch_n++;
+        break;
+    }
+    if (TOUCH_PINCH_ZOOM && touch_n == 2) {
+        pinch_ref_dist = touch_dist();
+        pinch_ref_size = font_size();
+        pinching = pinch_ref_dist > 1.0;
+    }
+    touch_scroll_acc = 0.0;
+}
+
+static void touch_up(void *d, struct wl_touch *t, uint32_t serial, uint32_t time, int32_t id) {
+    last_serial = serial;
+    int i = touch_slot(id);
+    if (i >= 0) {
+        tpts[i].active = false;
+        if (touch_n > 0) touch_n--;
+    }
+    if (touch_n < 2) pinching = false;
+    if (touch_n == 0) touch_scroll_acc = 0.0;
+}
+
+static void touch_motion(void *d, struct wl_touch *t, uint32_t time, int32_t id,
+                         wl_fixed_t x, wl_fixed_t y) {
+    int i = touch_slot(id);
+    if (i < 0) return;
+    double px = tpts[i].x, py = tpts[i].y;
+    tpts[i].x = wl_fixed_to_double(x);
+    tpts[i].y = wl_fixed_to_double(y);
+    (void)px;
+
+    if (TOUCH_PINCH_ZOOM && pinching && touch_n == 2) {
+        double dist = touch_dist();
+        if (fabs(dist - pinch_ref_dist) < (double)TOUCH_PINCH_MIN_PX) return;
+        double want = pinch_ref_size * (dist / pinch_ref_dist);
+        double target = floor(want + 0.5);
+        if (target != floor(font_size() + 0.5)) {
+            if (font_set_size(target)) regrid();
+        }
+        return;
+    }
+
+    if (TOUCH_SCROLL && touch_n == 1) {
+        double dy = tpts[i].y - py;
+        touch_scroll_acc += dy * (double)TOUCH_SCROLL_SPEED;
+        int lines = (int)(touch_scroll_acc / font_cell_h());
+        if (lines != 0) {
+            touch_scroll_acc -= lines * (double)font_cell_h();
+            if (app.term->alt) {
+                const char *seq = lines < 0 ? (app.term->app_cursor ? "\033OB" : "\033[B")
+                                            : (app.term->app_cursor ? "\033OA" : "\033[A");
+                int n = lines < 0 ? -lines : lines;
+                if (n > 8) n = 8;
+                for (int k = 0; k < n; k++) ptywrite(seq, 3);
+            } else {
+                term_scroll_view(app.term, lines);
+                app.need_draw = true;
+            }
+        }
+    }
+}
+
+static void touch_frame(void *d, struct wl_touch *t) {}
+static void touch_cancel(void *d, struct wl_touch *t) {
+    for (int i = 0; i < MAX_TOUCH; i++) tpts[i].active = false;
+    touch_n = 0;
+    pinching = false;
+    touch_scroll_acc = 0.0;
+}
+static void touch_shape(void *d, struct wl_touch *t, int32_t id, wl_fixed_t maj, wl_fixed_t min) {}
+static void touch_orientation(void *d, struct wl_touch *t, int32_t id, wl_fixed_t o) {}
+
+static const struct wl_touch_listener touch_listener = {
+    .down = touch_down,
+    .up = touch_up,
+    .motion = touch_motion,
+    .frame = touch_frame,
+    .cancel = touch_cancel,
+    .shape = touch_shape,
+    .orientation = touch_orientation,
+};
+
 static void ptr_frame(void *d, struct wl_pointer *p) {}
 static void ptr_axis_source(void *d, struct wl_pointer *p, uint32_t src) {}
 static void ptr_axis_stop(void *d, struct wl_pointer *p, uint32_t t, uint32_t axis) {}
@@ -889,6 +1024,84 @@ static const struct wl_pointer_listener ptr_listener = {
     .axis_discrete = ptr_axis_discrete,
 };
 
+#if HAVE_TEXTIN
+static void ti_update_cursor_rect(void) {
+    if (!ti || !ti_enabled) return;
+    int cw = font_cell_w(), ch = font_cell_h();
+    int ox = INNER_BORDER + (app.width - 2 * INNER_BORDER - app.cols * cw) / 2;
+    int oy = INNER_BORDER + (app.height - 2 * INNER_BORDER - app.rows * ch) / 2;
+    if (ox < 0) ox = 0;
+    if (oy < 0) oy = 0;
+    zwp_text_input_v3_set_cursor_rectangle(ti, ox + app.term->cx * cw,
+                                           oy + app.term->cy * ch, cw, ch);
+}
+
+static void ti_enable(void) {
+    if (!ti || ti_enabled) return;
+    ti_enabled = true;
+    zwp_text_input_v3_enable(ti);
+    zwp_text_input_v3_set_content_type(ti,
+        ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE,
+        ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_TERMINAL);
+    ti_update_cursor_rect();
+    zwp_text_input_v3_commit(ti);
+}
+
+static void ti_disable(void) {
+    if (!ti || !ti_enabled) return;
+    ti_enabled = false;
+    zwp_text_input_v3_disable(ti);
+    zwp_text_input_v3_commit(ti);
+}
+
+static void ti_ev_enter(void *d, struct zwp_text_input_v3 *t, struct wl_surface *s2) {
+    ti_enable();
+}
+static void ti_ev_leave(void *d, struct zwp_text_input_v3 *t, struct wl_surface *s2) {
+    ti_enabled = false;
+}
+static void ti_ev_preedit(void *d, struct zwp_text_input_v3 *t, const char *text,
+                          int32_t begin, int32_t end) {}
+static void ti_ev_commit_string(void *d, struct zwp_text_input_v3 *t, const char *text) {
+    ti_commit_len = 0;
+    if (!text) return;
+    size_t n = strlen(text);
+    if (n >= sizeof ti_commit) n = sizeof ti_commit - 1;
+    memcpy(ti_commit, text, n);
+    ti_commit_len = (int)n;
+}
+static void ti_ev_delete_surrounding(void *d, struct zwp_text_input_v3 *t,
+                                     uint32_t before, uint32_t after) {
+    ti_delete_before = before;
+    ti_delete_after = after;
+}
+static void ti_ev_done(void *d, struct zwp_text_input_v3 *t, uint32_t serial) {
+    ti_serial = serial;
+
+    for (uint32_t i = 0; i < ti_delete_before; i++) ptywrite("\177", 1);
+    ti_delete_before = ti_delete_after = 0;
+
+    if (ti_commit_len > 0) {
+        Term *tm = app.term;
+        if (tm->scroll_off) { tm->scroll_off = 0; tm->dirty = true; app.need_draw = true; }
+        if (term_sel_active(tm)) { term_sel_clear(tm); app.need_draw = true; }
+        for (int i = 0; i < ti_commit_len; i++)
+            if (ti_commit[i] == '\n') ti_commit[i] = '\r';
+        ptywrite(ti_commit, (size_t)ti_commit_len);
+        ti_commit_len = 0;
+    }
+}
+
+static const struct zwp_text_input_v3_listener ti_listener = {
+    .enter = ti_ev_enter,
+    .leave = ti_ev_leave,
+    .preedit_string = ti_ev_preedit,
+    .commit_string = ti_ev_commit_string,
+    .delete_surrounding_text = ti_ev_delete_surrounding,
+    .done = ti_ev_done,
+};
+#endif
+
 static void setup_data_devices(void) {
     if (!seat) return;
     if (ddm && !ddev) {
@@ -901,6 +1114,12 @@ static void setup_data_devices(void) {
         zwp_primary_selection_device_v1_add_listener(psdev, &psd_listener, NULL);
     }
 #endif
+#if HAVE_TEXTIN
+    if (TEXT_INPUT && ti_mgr && !ti) {
+        ti = zwp_text_input_manager_v3_get_text_input(ti_mgr, seat);
+        zwp_text_input_v3_add_listener(ti, &ti_listener, NULL);
+    }
+#endif
 }
 
 static void seat_caps(void *d, struct wl_seat *s, uint32_t caps) {
@@ -911,6 +1130,10 @@ static void seat_caps(void *d, struct wl_seat *s, uint32_t caps) {
     if ((caps & WL_SEAT_CAPABILITY_POINTER) && !pointer) {
         pointer = wl_seat_get_pointer(s);
         wl_pointer_add_listener(pointer, &ptr_listener, NULL);
+    }
+    if (TOUCH_ENABLE && (caps & WL_SEAT_CAPABILITY_TOUCH) && !touch) {
+        touch = wl_seat_get_touch(s);
+        wl_touch_add_listener(touch, &touch_listener, NULL);
     }
     setup_data_devices();
 }
@@ -932,6 +1155,10 @@ static void reg_global(void *d, struct wl_registry *r, uint32_t name,
 #if HAVE_PRIMSEL
     } else if (!strcmp(iface, zwp_primary_selection_device_manager_v1_interface.name)) {
         psm = wl_registry_bind(r, name, &zwp_primary_selection_device_manager_v1_interface, 1);
+#endif
+#if HAVE_TEXTIN
+    } else if (!strcmp(iface, zwp_text_input_manager_v3_interface.name)) {
+        ti_mgr = wl_registry_bind(r, name, &zwp_text_input_manager_v3_interface, 1);
 #endif
     } else if (!strcmp(iface, zxdg_decoration_manager_v1_interface.name)) {
         deco_mgr = wl_registry_bind(r, name, &zxdg_decoration_manager_v1_interface, 1);
@@ -1271,6 +1498,13 @@ void wl_run(App *a) {
                 wl_set_title(last_title);
             }
         }
+
+#if HAVE_TEXTIN
+        if (TEXT_INPUT && ti && ti_enabled && app.term->cursor_moved) {
+            ti_update_cursor_rect();
+            zwp_text_input_v3_commit(ti);
+        }
+#endif
 
         app.now = now_sec();
         if (app.need_draw || app.term->dirty || render_animating()) draw(false);
