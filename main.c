@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
-            printf("titty 0.1\n");
+            printf("titty 0.1.0\n");
             return 0;
         }
     }

@@ -1,0 +1,5 @@
+tit.png export-ignore
+tit2.png export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+pgo-workload.sh export-ignore
