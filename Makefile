@@ -122,7 +122,7 @@ CONFIGS  = $(addprefix titty.h.,$(VARIANTS))
 SRC = main.c wayland.c pty.c vt.c font.c render.c boxdraw.c $(PROTO_C)
 OBJ = $(SRC:.c=.o)
 
-all: $(BIN)
+all: $(BIN) logo
 
 proto/xdg-shell-client-protocol.h: $(WLP)/stable/xdg-shell/xdg-shell.xml
 	@mkdir -p proto
@@ -202,6 +202,15 @@ endef
 ifeq ($(BIN),titty)
 $(foreach v,$(VARIANTS),$(eval $(call VARIANT_RULE,$(v))))
 endif
+
+FFLOGODIR = $(HOME)/.config/fastfetch/logo
+
+logo: titty.logo
+	@if [ -d "$(FFLOGODIR)" ]; then \
+	  cp -f titty.logo "$(FFLOGODIR)/titty.logo"; \
+	  rm -rf "$(HOME)/.cache/fastfetch/images"; \
+	  echo "logo installerad: $(FFLOGODIR)/titty.logo"; \
+	fi
 
 configs: $(CONFIGS)
 
@@ -315,4 +324,4 @@ clean: clean-obj
 	rm -f config_defaults.h titty $(addprefix titty-,$(VARIANTS)) titty.profdata
 	rm -rf proto $(PGODIR)
 
-.PHONY: all clean clean-obj install uninstall pgo gcc arm64 config variants configs batshit
+.PHONY: all clean clean-obj install uninstall pgo gcc arm64 config variants configs batshit logo
