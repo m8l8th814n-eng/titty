@@ -55,7 +55,7 @@ PKGCONFIG = $(if $(SYSROOT),PKG_CONFIG_SYSROOT_DIR=$(SYSROOT) \
 SYSFLAGS  = $(if $(SYSROOT),--sysroot=$(SYSROOT),)
 
 ifneq ($(strip $(shell $(PKGCONFIG) --exists $(PKGS) 2>/dev/null || echo missing)),)
-$(error cannot find all libraries via pkg-config$(if $(SYSROOT), in SYSROOT=$(SYSROOT),). \\
+$(error cannot find all libraries via pkg-config$(if $(SYSROOT), in SYSROOT=$(SYSROOT),). \
 Required: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev libpng-dev zlib-dev)
 endif
 
@@ -67,13 +67,13 @@ LDLIBS  = $(shell $(PKGCONFIG) --libs $(PKGS)) -lutil -lm
 WLP     = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 
 ifeq ($(strip $(WLP)),)
-$(error cannot find wayland-protocols. Install it (Alpine: apk add wayland-protocols, \\
+$(error cannot find wayland-protocols. Install it (Alpine: apk add wayland-protocols, \
 Arch: pacman -S wayland-protocols) or set the path with WLP=/path/to/wayland-protocols)
 endif
 
 ifneq ($(CROSS),)
 ifeq ($(strip $(SYSROOT)),)
-$(error cross-compilation with CROSS=$(CROSS) also requires SYSROOT=/path/to/aarch64-root \\
+$(error cross-compilation with CROSS=$(CROSS) also requires SYSROOT=/path/to/aarch64-root \
 with wayland, EGL, freetype, fontconfig and xkbcommon for the target architecture)
 endif
 endif
