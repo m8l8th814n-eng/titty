@@ -1,15 +1,20 @@
 #include <ctype.h>
 #include <fcntl.h>
-#include <png.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <zlib.h>
 
 #include "common.h"
+
+#if HAVE_PNG
+#include <png.h>
+#endif
+#if HAVE_ZLIB
+#include <zlib.h>
+#endif
 
 #define APC_MAX   (256u << 20)
 #define GFX_QUOTA ((size_t)320 << 20)
@@ -158,6 +163,7 @@ static uint8_t *b64_decode(const char *s, size_t n, size_t *out_len) {
     return o;
 }
 
+#if HAVE_ZLIB
 static uint8_t *inflate_all(const uint8_t *src, size_t n, size_t *out_len) {
     size_t cap = n * 4 + 4096, len = 0;
     uint8_t *o = malloc(cap);
@@ -185,6 +191,7 @@ static uint8_t *inflate_all(const uint8_t *src, size_t n, size_t *out_len) {
     *out_len = len;
     return o;
 }
+#endif
 
 static uint8_t *read_path(const Cmd *c, const uint8_t *path_b, size_t plen, size_t *out_len) {
     char path[4096];
@@ -239,15 +246,21 @@ static const char *load(const Cmd *c, const char *b, size_t blen, uint8_t **out,
     }
 
     if (c->o == 'z') {
+#if HAVE_ZLIB
         size_t zl = 0;
         uint8_t *z = inflate_all(raw, n, &zl);
         free(raw);
         if (!z) return "EINVAL:zlib decompression failed";
         raw = z;
         n = zl;
+#else
+        free(raw);
+        return "EINVAL:built without zlib";
+#endif
     }
 
     if (c->f == 100) {
+#if HAVE_PNG
         png_image pi;
         memset(&pi, 0, sizeof pi);
         pi.version = PNG_IMAGE_VERSION;
@@ -270,6 +283,10 @@ static const char *load(const Cmd *c, const char *b, size_t blen, uint8_t **out,
         *ow = (int)pi.width;
         *oh = (int)pi.height;
         return NULL;
+#else
+        free(raw);
+        return "EINVAL:built without libpng";
+#endif
     }
 
     if (c->f != 24 && c->f != 32) { free(raw); return "EINVAL:unsupported format"; }

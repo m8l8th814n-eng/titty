@@ -1,4 +1,4 @@
-PKGS   = wayland-client wayland-egl wayland-cursor egl glesv2 xkbcommon freetype2 fontconfig libpng zlib
+PKGS   = wayland-client wayland-egl wayland-cursor egl glesv2 xkbcommon freetype2 fontconfig
 PREFIX ?= /usr/local
 
 TOOLCHAIN ?= clang
@@ -56,8 +56,12 @@ SYSFLAGS  = $(if $(SYSROOT),--sysroot=$(SYSROOT),)
 
 ifneq ($(strip $(shell $(PKGCONFIG) --exists $(PKGS) 2>/dev/null || echo missing)),)
 $(error cannot find all libraries via pkg-config$(if $(SYSROOT), in SYSROOT=$(SYSROOT),). \
-Required: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev libpng-dev zlib-dev)
+Required: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev)
 endif
+
+HAVE_PNG  := $(if $(shell $(PKGCONFIG) --exists libpng 2>/dev/null && echo y),1,0)
+HAVE_ZLIB := $(if $(shell $(PKGCONFIG) --exists zlib 2>/dev/null && echo y),1,0)
+PKGS += $(if $(filter 1,$(HAVE_PNG)),libpng) $(if $(filter 1,$(HAVE_ZLIB)),zlib)
 
 CFLAGS  = -std=c11 -pipe $(WARN) $(OPT) $(SYSFLAGS) -D_GNU_SOURCE -I. -Iproto $(EXTRA_CFLAGS)
 CFLAGS += $(shell $(PKGCONFIG) --cflags $(PKGS))
@@ -113,7 +117,7 @@ PROTO_H += proto/blur-client-protocol.h
 PROTO_C += proto/blur-protocol.c
 endif
 
-CFLAGS += -DHAVE_EXTBG=$(HAVE_EXTBG) -DHAVE_KBLUR=$(HAVE_KBLUR) -DHAVE_PRIMSEL=$(HAVE_PRIMSEL) -DHAVE_TEXTIN=$(HAVE_TEXTIN)
+CFLAGS += -DHAVE_PNG=$(HAVE_PNG) -DHAVE_ZLIB=$(HAVE_ZLIB) -DHAVE_EXTBG=$(HAVE_EXTBG) -DHAVE_KBLUR=$(HAVE_KBLUR) -DHAVE_PRIMSEL=$(HAVE_PRIMSEL) -DHAVE_TEXTIN=$(HAVE_TEXTIN)
 
 BIN ?= titty
 VARIANTS = crt neon frost flat
