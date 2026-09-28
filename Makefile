@@ -54,21 +54,43 @@ PKGCONFIG = $(if $(SYSROOT),PKG_CONFIG_SYSROOT_DIR=$(SYSROOT) \
             PKG_CONFIG_LIBDIR=$(SYSROOT)/usr/lib/pkgconfig:$(SYSROOT)/usr/share/pkgconfig,) pkg-config
 SYSFLAGS  = $(if $(SYSROOT),--sysroot=$(SYSROOT),)
 
-ifneq ($(strip $(shell $(PKGCONFIG) --exists $(PKGS) 2>/dev/null || echo missing)),)
-$(error cannot find all libraries via pkg-config$(if $(SYSROOT), in SYSROOT=$(SYSROOT),). \
-Required: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev)
-endif
+PKG_OK = $(shell $(PKGCONFIG) --exists $(1) 2>/dev/null && echo y)
 
-HAVE_PNG  := $(if $(shell $(PKGCONFIG) --exists libpng 2>/dev/null && echo y),1,0)
-HAVE_ZLIB := $(if $(shell $(PKGCONFIG) --exists zlib 2>/dev/null && echo y),1,0)
+HAVE_PNG  := $(if $(or $(call PKG_OK,libpng),$(wildcard $(SYSROOT)/usr/include/png.h)),1,0)
+HAVE_ZLIB := $(if $(or $(call PKG_OK,zlib),$(wildcard $(SYSROOT)/usr/include/zlib.h)),1,0)
 PKGS += $(if $(filter 1,$(HAVE_PNG)),libpng) $(if $(filter 1,$(HAVE_ZLIB)),zlib)
 
-CFLAGS  = -std=c11 -pipe $(WARN) $(OPT) $(SYSFLAGS) -D_GNU_SOURCE -I. -Iproto $(EXTRA_CFLAGS)
-CFLAGS += $(shell $(PKGCONFIG) --cflags $(PKGS))
-LDFLAGS = $(LDOPT) $(SYSFLAGS) $(EXTRA_LDFLAGS)
-LDLIBS  = $(shell $(PKGCONFIG) --libs $(PKGS)) -lutil -lm
+# utan .pc-fil: vanliga flaggor, kompilatorn sager till om nagot verkligen saknas
+FALLBACK_CFLAGS_freetype2 = -I$(SYSROOT)/usr/include/freetype2
+FALLBACK_LIBS_wayland-client  = -lwayland-client
+FALLBACK_LIBS_wayland-egl     = -lwayland-egl
+FALLBACK_LIBS_wayland-cursor  = -lwayland-cursor
+FALLBACK_LIBS_egl             = -lEGL
+FALLBACK_LIBS_glesv2          = -lGLESv2
+FALLBACK_LIBS_xkbcommon       = -lxkbcommon
+FALLBACK_LIBS_freetype2       = -lfreetype
+FALLBACK_LIBS_fontconfig      = -lfontconfig
+FALLBACK_LIBS_libpng          = -lpng
+FALLBACK_LIBS_zlib            = -lz
 
-WLP     = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
+PKG_FOUND   := $(foreach p,$(PKGS),$(if $(call PKG_OK,$(p)),$(p)))
+PKG_MISSING := $(filter-out $(PKG_FOUND),$(PKGS))
+
+ifneq ($(PKG_MISSING),)
+ifeq ($(MAKELEVEL),0)
+$(info pkg-config hittar inte: $(PKG_MISSING) - bygger med vanliga -l-flaggor)
+endif
+endif
+
+CFLAGS  = -std=c11 -pipe $(WARN) $(OPT) $(SYSFLAGS) -D_GNU_SOURCE -I. -Iproto $(EXTRA_CFLAGS)
+CFLAGS += $(if $(PKG_FOUND),$(shell $(PKGCONFIG) --cflags $(PKG_FOUND))) \
+          $(foreach p,$(PKG_MISSING),$(FALLBACK_CFLAGS_$(p)))
+LDFLAGS = $(LDOPT) $(SYSFLAGS) $(EXTRA_LDFLAGS)
+LDLIBS  = $(if $(PKG_FOUND),$(shell $(PKGCONFIG) --libs $(PKG_FOUND))) \
+          $(foreach p,$(PKG_MISSING),$(FALLBACK_LIBS_$(p))) -lutil -lm
+
+WLP    ?= $(or $(shell pkg-config --variable=pkgdatadir wayland-protocols 2>/dev/null), \
+               $(wildcard $(SYSROOT)/usr/share/wayland-protocols))
 
 ifeq ($(strip $(WLP)),)
 $(error cannot find wayland-protocols. Install it (Alpine: apk add wayland-protocols, \
