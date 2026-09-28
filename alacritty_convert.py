@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Konvertera en alacritty-konfiguration (tema + font) till titty.h."""
+"""Convert an alacritty config (theme + font) to titty.h."""
 
 import argparse
 import os
@@ -135,10 +135,10 @@ def convert(cfg, want_font=True, want_colors=True, want_window=True):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Konvertera alacritty-config/tema till titty.h')
+    ap = argparse.ArgumentParser(description='Convert alacritty config/theme to titty.h')
     ap.add_argument('config', nargs='+',
-                    help='alacritty.toml och/eller temafiler (senare fil vinner)')
-    ap.add_argument('-o', '--output', default=None, help='titty.h att uppdatera')
+                    help='alacritty.toml and/or theme files (later file wins)')
+    ap.add_argument('-o', '--output', default=None, help='titty.h to update')
     ap.add_argument('--colors-only', action='store_true')
     ap.add_argument('--font-only', action='store_true')
     ap.add_argument('--no-window', action='store_true',
@@ -164,7 +164,7 @@ def main():
                      want_colors=not args.font_only,
                      want_window=not args.no_window)
     if not values:
-        sys.exit('inget att konvertera i angivna filer')
+        sys.exit('nothing to convert in given files')
 
     report(patch_header(out, values, args.dry_run), out, args.dry_run)
     if not args.dry_run:

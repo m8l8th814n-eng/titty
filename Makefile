@@ -60,7 +60,7 @@ HAVE_PNG  := $(if $(or $(call PKG_OK,libpng),$(wildcard $(SYSROOT)/usr/include/p
 HAVE_ZLIB := $(if $(or $(call PKG_OK,zlib),$(wildcard $(SYSROOT)/usr/include/zlib.h)),1,0)
 PKGS += $(if $(filter 1,$(HAVE_PNG)),libpng) $(if $(filter 1,$(HAVE_ZLIB)),zlib)
 
-# utan .pc-fil: vanliga flaggor, kompilatorn sager till om nagot verkligen saknas
+# no .pc file: plain flags, the compiler complains if something is really missing
 FALLBACK_CFLAGS_freetype2 = -I$(SYSROOT)/usr/include/freetype2
 FALLBACK_LIBS_wayland-client  = -lwayland-client
 FALLBACK_LIBS_wayland-egl     = -lwayland-egl
@@ -78,7 +78,7 @@ PKG_MISSING := $(filter-out $(PKG_FOUND),$(PKGS))
 
 ifneq ($(PKG_MISSING),)
 ifeq ($(MAKELEVEL),0)
-$(info pkg-config hittar inte: $(PKG_MISSING) - bygger med vanliga -l-flaggor)
+$(info pkg-config cannot find: $(PKG_MISSING) - building with plain -l flags)
 endif
 endif
 
@@ -246,7 +246,7 @@ $(CONFIGS): titty.h.%: presets/%.h titty.h preset_merge.py
 batshit: configs variants
 	@echo
 	@echo "== batshit done =="
-	@printf '  binarer : '; for b in titty $(addprefix titty-,$(VARIANTS)); do \
+	@printf '  binaries: '; for b in titty $(addprefix titty-,$(VARIANTS)); do \
 	  test -f $$b && printf '%s ' $$b; done; echo
 	@printf '  configs : '; for c in $(CONFIGS); do test -f $$c && printf '%s ' $$c; done; echo
 	@echo "  switch theme: cp titty.h.crt titty.h && make"
@@ -295,15 +295,15 @@ arm64:
 config:
 	@echo "toolchain : $(TOOLCHAIN)  ($(CC))"
 	@echo "arch      : $(ARCH)"
-	@echo "arch-flagg: $(ARCHFLAGS)"
+	@echo "archflags : $(ARCHFLAGS)"
 	@echo "cpu       : $(CPU)"
-	@echo "optnivå   : $(OPTLEVEL)"
+	@echo "optlevel  : $(OPTLEVEL)"
 	@echo "sysroot   : $(if $(SYSROOT),$(SYSROOT),-)"
 	@echo "prefix    : $(PREFIX)"
-	@echo "ext-bg-effect : $(if $(filter 1,$(HAVE_EXTBG)),ja,nej)"
-	@echo "kde-blur      : $(if $(filter 1,$(HAVE_KBLUR)),ja,nej)"
-	@echo "primarval     : $(if $(filter 1,$(HAVE_PRIMSEL)),ja,nej)"
-	@echo "text-input    : $(if $(filter 1,$(HAVE_TEXTIN)),ja,nej)"
+	@echo "ext-bg-effect : $(if $(filter 1,$(HAVE_EXTBG)),yes,no)"
+	@echo "kde-blur      : $(if $(filter 1,$(HAVE_KBLUR)),yes,no)"
+	@echo "primary-sel   : $(if $(filter 1,$(HAVE_PRIMSEL)),yes,no)"
+	@echo "text-input    : $(if $(filter 1,$(HAVE_TEXTIN)),yes,no)"
 
 BINDIR  = $(DESTDIR)$(PREFIX)/bin
 SHAREDIR = $(DESTDIR)$(PREFIX)/share

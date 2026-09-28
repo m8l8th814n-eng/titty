@@ -63,7 +63,7 @@ def merge(base_path, preset_path, out_path, preset_name):
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit('anvandning: preset_merge.py <preset> [preset ...]')
+        sys.exit('usage: preset_merge.py <preset> [preset ...]')
     here = os.path.dirname(os.path.abspath(__file__))
     for name in sys.argv[1:]:
         preset = os.path.join(here, 'presets', name + '.h')
