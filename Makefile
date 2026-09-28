@@ -1,4 +1,4 @@
-PKGS   = wayland-client wayland-egl wayland-cursor egl glesv2 xkbcommon freetype2 fontconfig
+PKGS   = wayland-client wayland-egl wayland-cursor egl glesv2 xkbcommon freetype2 fontconfig libpng zlib
 PREFIX ?= /usr/local
 
 TOOLCHAIN ?= clang
@@ -54,9 +54,9 @@ PKGCONFIG = $(if $(SYSROOT),PKG_CONFIG_SYSROOT_DIR=$(SYSROOT) \
             PKG_CONFIG_LIBDIR=$(SYSROOT)/usr/lib/pkgconfig:$(SYSROOT)/usr/share/pkgconfig,) pkg-config
 SYSFLAGS  = $(if $(SYSROOT),--sysroot=$(SYSROOT),)
 
-ifneq ($(strip $(shell $(PKGCONFIG) --exists $(PKGS) 2>/dev/null || echo saknas)),)
-$(error hittar inte alla bibliotek via pkg-config$(if $(SYSROOT), i SYSROOT=$(SYSROOT),). \
-Kravs: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev)
+ifneq ($(strip $(shell $(PKGCONFIG) --exists $(PKGS) 2>/dev/null || echo missing)),)
+$(error cannot find all libraries via pkg-config$(if $(SYSROOT), in SYSROOT=$(SYSROOT),). \\
+Required: $(PKGS). Alpine: apk add wayland-dev mesa-dev libxkbcommon-dev freetype-dev fontconfig-dev libpng-dev zlib-dev)
 endif
 
 CFLAGS  = -std=c11 -pipe $(WARN) $(OPT) $(SYSFLAGS) -D_GNU_SOURCE -I. -Iproto $(EXTRA_CFLAGS)
@@ -67,14 +67,14 @@ LDLIBS  = $(shell $(PKGCONFIG) --libs $(PKGS)) -lutil -lm
 WLP     = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
 
 ifeq ($(strip $(WLP)),)
-$(error hittar inte wayland-protocols. Installera det (Alpine: apk add wayland-protocols, \
-Arch: pacman -S wayland-protocols) eller ange sokvagen med WLP=/sokvag/till/wayland-protocols)
+$(error cannot find wayland-protocols. Install it (Alpine: apk add wayland-protocols, \\
+Arch: pacman -S wayland-protocols) or set the path with WLP=/path/to/wayland-protocols)
 endif
 
 ifneq ($(CROSS),)
 ifeq ($(strip $(SYSROOT)),)
-$(error korskompilering med CROSS=$(CROSS) kraver ocksa SYSROOT=/sokvag/till/aarch64-rot \
-med wayland, EGL, freetype, fontconfig och xkbcommon for malarkitekturen)
+$(error cross-compilation with CROSS=$(CROSS) also requires SYSROOT=/path/to/aarch64-root \\
+with wayland, EGL, freetype, fontconfig and xkbcommon for the target architecture)
 endif
 endif
 KDEP    = /usr/share/plasma-wayland-protocols
@@ -119,7 +119,7 @@ BIN ?= titty
 VARIANTS = crt neon frost flat
 CONFIGS  = $(addprefix titty.h.,$(VARIANTS))
 
-SRC = main.c wayland.c pty.c vt.c font.c render.c boxdraw.c $(PROTO_C)
+SRC = main.c wayland.c pty.c vt.c font.c render.c boxdraw.c gfx.c $(PROTO_C)
 OBJ = $(SRC:.c=.o)
 
 all: $(BIN) logo
@@ -173,16 +173,16 @@ proto/blur-protocol.c: $(BLUR_XML)
 	$(SCANNER) private-code $< $@
 
 titty.h:
-	@test -f titty.h.default || { echo "titty.h.default saknas"; exit 1; }
+	@test -f titty.h.default || { echo "titty.h.default not found"; exit 1; }
 	cp titty.h.default $@
-	@echo "titty.h skapad från titty.h.default - redigera den och kör make igen"
+	@echo "titty.h created from titty.h.default - edit it and run make again"
 
 config_defaults.h: titty.h.default
 	@awk '/^#define[ \t]+[A-Z0-9_]+/ { \
 	    name = $$2; \
 	    print "#ifndef " name; print $$0; print "#endif" ; next } \
 	    { next }' titty.h.default > $@
-	@echo "config_defaults.h genererad ur titty.h.default"
+	@echo "config_defaults.h generated from titty.h.default"
 
 $(OBJ): $(PROTO_H) titty.h common.h config_defaults.h
 
@@ -209,7 +209,7 @@ logo: titty.logo
 	@if [ -d "$(FFLOGODIR)" ]; then \
 	  cp -f titty.logo "$(FFLOGODIR)/titty.logo"; \
 	  rm -rf "$(HOME)/.cache/fastfetch/images"; \
-	  echo "logo installerad: $(FFLOGODIR)/titty.logo"; \
+	  echo "logo installed: $(FFLOGODIR)/titty.logo"; \
 	fi
 
 configs: $(CONFIGS)
@@ -219,32 +219,37 @@ $(CONFIGS): titty.h.%: presets/%.h titty.h preset_merge.py
 
 batshit: configs variants
 	@echo
-	@echo "== batshit klart =="
+	@echo "== batshit done =="
 	@printf '  binarer : '; for b in titty $(addprefix titty-,$(VARIANTS)); do \
 	  test -f $$b && printf '%s ' $$b; done; echo
 	@printf '  configs : '; for c in $(CONFIGS); do test -f $$c && printf '%s ' $$c; done; echo
-	@echo "  byt tema: cp titty.h.crt titty.h && make"
+	@echo "  switch theme: cp titty.h.crt titty.h && make"
 
 variants: $(addprefix titty-,$(VARIANTS))
-	@echo "klart: $(addprefix titty-,$(VARIANTS))"
+	@echo "done: $(addprefix titty-,$(VARIANTS))"
+
+DEMO = flat frost crt
+
+demo: $(BIN) $(addprefix titty-,$(DEMO))
+	@echo "done: $(BIN) $(addprefix titty-,$(DEMO))"
 
 PGODIR = $(CURDIR)/.pgo
 
 pgo:
-	@command -v llvm-profdata >/dev/null 2>&1 || { echo "llvm-profdata saknas"; exit 1; }
-	@[ -n "$$WAYLAND_DISPLAY" ] || { echo "pgo kräver en wayland-session"; exit 1; }
+	@command -v llvm-profdata >/dev/null 2>&1 || { echo "llvm-profdata not found"; exit 1; }
+	@[ -n "$$WAYLAND_DISPLAY" ] || { echo "pgo requires a wayland session"; exit 1; }
 	$(MAKE) clean-obj
 	rm -rf $(PGODIR) titty.profdata
 	$(MAKE) EXTRA_CFLAGS="-fprofile-generate=$(PGODIR)" \
 	        EXTRA_LDFLAGS="-fprofile-generate=$(PGODIR)"
-	@echo "== profileringskörning =="
+	@echo "== profiling run =="
 	@sh ./pgo-workload.sh ./titty >/dev/null 2>&1 || true
 	@llvm-profdata merge -output=titty.profdata $(PGODIR)/*.profraw
 	$(MAKE) clean-obj
 	$(MAKE) EXTRA_CFLAGS="-fprofile-use=$(CURDIR)/titty.profdata \
 	        -Wno-profile-instr-unprofiled -Wno-profile-instr-out-of-date"
 	@rm -rf $(PGODIR)
-	@echo "== PGO-build klar =="
+	@echo "== PGO build done =="
 
 gcc:
 	+$(MAKE) clean-obj
@@ -252,10 +257,10 @@ gcc:
 
 arm64:
 	@if [ "$$(uname -m)" != "aarch64" ] && [ -z "$(CROSS)" ]; then \
-	  echo "make arm64 bygger nativt pa aarch64-hardvara."; \
-	  echo "Du star pa $$(uname -m) - da kravs korskompilering:"; \
-	  echo "  make arm64 CROSS=aarch64-linux-gnu- SYSROOT=/sokvag/till/rot CPU=cortex-a76"; \
-	  echo "SYSROOT maste ha aarch64-versioner av wayland, EGL, freetype, fontconfig, xkbcommon."; \
+	  @echo "make arm64 builds natively on aarch64 hardware."
+	  @echo "You are on $$(uname -m) - cross-compilation required:"
+	  @echo "  make arm64 CROSS=aarch64-linux-gnu- SYSROOT=/path/to/root CPU=cortex-a76"
+	  @echo "SYSROOT must have aarch64 versions of wayland, EGL, freetype, fontconfig, xkbcommon."
 	  exit 1; \
 	fi
 	+$(MAKE) clean-obj
@@ -284,7 +289,7 @@ install: titty
 	@for v in $(VARIANTS); do \
 	  if [ -f titty-$$v ]; then \
 	    install -Dm755 titty-$$v $(BINDIR)/titty-$$v; \
-	    echo "installerad: $(BINDIR)/titty-$$v"; \
+	    echo "installed: $(BINDIR)/titty-$$v"; \
 	  fi; \
 	done
 	install -Dm644 titty.desktop $(APPDIR)/titty.desktop
@@ -305,7 +310,7 @@ install: titty
 	@test -f titty.h.default && install -Dm644 titty.h.default $(DOCDIR)/titty.h.default || true
 	@command -v update-desktop-database >/dev/null 2>&1 && \
 	  update-desktop-database -q $(APPDIR) 2>/dev/null || true
-	@echo "installerad: $(BINDIR)/titty"
+	@echo "installed: $(BINDIR)/titty"
 
 uninstall:
 	rm -f $(BINDIR)/titty
@@ -315,7 +320,7 @@ uninstall:
 	rm -rf $(DOCDIR)
 	@command -v update-desktop-database >/dev/null 2>&1 && \
 	  update-desktop-database -q $(APPDIR) 2>/dev/null || true
-	@echo "avinstallerad" 
+	@echo "uninstalled"
 
 clean-obj:
 	rm -f $(OBJ)
@@ -324,4 +329,4 @@ clean: clean-obj
 	rm -f config_defaults.h titty $(addprefix titty-,$(VARIANTS)) titty.profdata
 	rm -rf proto $(PGODIR)
 
-.PHONY: all clean clean-obj install uninstall pgo gcc arm64 config variants configs batshit logo
+.PHONY: all clean clean-obj install uninstall pgo gcc arm64 config variants demo configs batshit logo

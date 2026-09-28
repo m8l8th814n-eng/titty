@@ -241,7 +241,7 @@ static void parse_binds(const char *spec, BindSet *out) {
             out->alt[out->n].sym = sym;
             out->n++;
         } else {
-            fprintf(stderr, "titty: okänd tangent i bindning: %s\n", key);
+            fprintf(stderr, "titty: unknown key in binding: %s\n", key);
         }
 
         if (!comma) break;
@@ -275,7 +275,9 @@ static void spawn_new_window(void) {
     pid_t pid = fork();
     if (pid != 0) return;
     setsid();
-    for (int fd = 3; fd < 64; fd++) close(fd);
+    long maxfd = sysconf(_SC_OPEN_MAX);
+    if (maxfd < 0) maxfd = 1024;
+    for (long fd = 3; fd < maxfd; fd++) close((int)fd);
     char self[PATH_MAX];
     ssize_t n = readlink("/proc/self/exe", self, sizeof self - 1);
     if (n > 0) {
@@ -896,8 +898,8 @@ static void ptr_axis(void *d, struct wl_pointer *p, uint32_t t, uint32_t axis, w
         const char *seq = lines < 0 ? (app.term->app_cursor ? "\033OA" : "\033[A")
                                     : (app.term->app_cursor ? "\033OB" : "\033[B");
         int n = lines < 0 ? -lines : lines;
-        if (n > 10) n = 10;
-        for (int i = 0; i < n * 3; i++) ptywrite(seq, 3);
+        if (n > 3) n = 3;
+        for (int i = 0; i < n; i++) ptywrite(seq, 3);
     } else {
         term_scroll_view(app.term, -lines * 3);
         app.need_draw = true;

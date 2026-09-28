@@ -439,13 +439,11 @@ const Glyph *font_glyph(uint32_t cp, int style) {
         CacheEnt *e = &cache[(idx + probe) & (CACHE_SIZE - 1)];
         if (e->used && e->key == key) return e->g.valid ? &e->g : NULL;
         if (!e->used) {
-            e->used = true;
-            e->key = key;
             memset(&e->g, 0, sizeof e->g);
             bool ok = rasterize(cp, style, &e->g);
+            e->g.valid = ok;
             e->used = true;
             e->key = key;
-            e->g.valid = ok;
             return ok ? &e->g : NULL;
         }
     }

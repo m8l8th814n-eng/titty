@@ -11,7 +11,7 @@ from titty_config import parse_color, fc_pattern, patch_header, report
 try:
     import tomllib
 except ModuleNotFoundError:
-    sys.exit('alacritty_convert: kräver python 3.11+ (tomllib)')
+    sys.exit('alacritty_convert: requires python 3.11+ (tomllib)')
 
 ANSI = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
 
@@ -47,7 +47,7 @@ def load(path, seen=None):
         if os.path.exists(p):
             deep_merge(merged, load(p, seen))
         else:
-            sys.stderr.write('warning: import saknas: %s\n' % p)
+            sys.stderr.write('warning: missing import: %s\\n' % p)
     return deep_merge(merged, cfg)
 
 
@@ -142,21 +142,21 @@ def main():
     ap.add_argument('--colors-only', action='store_true')
     ap.add_argument('--font-only', action='store_true')
     ap.add_argument('--no-window', action='store_true',
-                    help='hoppa över padding/opacitet/fönsterstorlek')
+                    help='skip padding/opacity/window size')
     ap.add_argument('-n', '--dry-run', action='store_true')
     args = ap.parse_args()
 
     out = args.output or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'titty.h')
     if not os.path.exists(out):
-        sys.exit('hittar inte %s' % out)
+        sys.exit('not found: %s' % out)
 
     cfg = {}
     for path in args.config:
         p = os.path.expanduser(path)
         if not os.path.exists(p):
-            sys.exit('hittar inte %s' % p)
+            sys.exit('not found: %s' % p)
         if p.endswith(('.yml', '.yaml')):
-            sys.exit('%s: YAML stöds inte, konvertera till TOML först' % p)
+            sys.exit('%s: YAML not supported, convert to TOML first' % p)
         deep_merge(cfg, load(p))
 
     values = convert(cfg,
@@ -168,7 +168,7 @@ def main():
 
     report(patch_header(out, values, args.dry_run), out, args.dry_run)
     if not args.dry_run:
-        print('kör `make` för att bygga om')
+        print('run `make` to rebuild')
 
 
 if __name__ == '__main__':

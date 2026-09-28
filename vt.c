@@ -12,7 +12,9 @@ enum {
     ST_CSI,
     ST_OSC,
     ST_STR_IGNORE,
-    ST_CHARSET
+    ST_CHARSET,
+    ST_APC,
+    ST_APC_ESC
 };
 
 static const uint16_t dec_graphics[] = {
@@ -21,8 +23,6 @@ static const uint16_t dec_graphics[] = {
     0x23bb, 0x2500, 0x23bc, 0x23bd, 0x251c, 0x2524, 0x2534, 0x252c,
     0x2502, 0x2264, 0x2265, 0x03c0, 0x2260, 0x00a3, 0x00b7
 };
-
-static bool g0_graphics = false;
 
 static void reply(Term *t, const char *s) {
     if (t->ptyfd >= 0) {
@@ -234,6 +234,7 @@ static void scroll_up(Term *t, int n) {
         memmove(&t->screen[top * t->cols], &t->screen[(top + n) * t->cols],
                 move * t->cols * sizeof(Cell));
     erase_cells(t, &t->screen[(top + move) * t->cols], n * t->cols);
+    gfx_scroll(t, top, bot, n);
     t->dirty = true;
 }
 
@@ -246,6 +247,7 @@ static void scroll_down(Term *t, int n) {
         memmove(&t->screen[(top + n) * t->cols], &t->screen[top * t->cols],
                 move * t->cols * sizeof(Cell));
     erase_cells(t, &t->screen[top * t->cols], n * t->cols);
+    gfx_scroll(t, top, bot, -n);
     t->dirty = true;
 }
 
@@ -326,6 +328,15 @@ static void put_char(Term *t, uint32_t cp) {
     t->cursor_moved = true;
 }
 
+void term_image_advance(Term *t, int cols, int rows) {
+    for (int i = 1; i < rows; i++) newline(t);
+    int x = t->cx + cols;
+    t->cx = x < t->cols ? x : t->cols - 1;
+    t->wrapnext = false;
+    t->cursor_moved = true;
+    t->dirty = true;
+}
+
 static void set_mode(Term *t, bool priv, int m, bool on) {
     if (!priv) {
         switch (m) {
@@ -347,6 +358,7 @@ static void set_mode(Term *t, bool priv, int m, bool on) {
     case 1004: t->focus_events = on; break;
     case 1049:
         if (on != t->alt) {
+            gfx_clear(t, true);
             if (on) {
                 t->save_cx = t->cx; t->save_cy = t->cy; t->save_pen = t->pen;
                 t->screen = t->alt_buf;
@@ -466,8 +478,12 @@ static void erase_display(Term *t, int mode) {
     case 1: erase_cells(t, t->screen, cur + 1); break;
     case 2:
     case 3:
-        if (!t->alt && mode == 2)
+        if (!t->alt && mode == 2) {
             for (int y = 0; y < t->rows; y++) sb_push(t, &t->screen[y * t->cols]);
+            gfx_scroll(t, 0, t->rows - 1, t->rows);
+        } else {
+            gfx_clear(t, t->alt);
+        }
         erase_cells(t, t->screen, total);
         if (mode == 3) { t->sb_len = 0; t->sb_head = 0; t->scroll_off = 0; }
         break;
@@ -619,7 +635,15 @@ static void csi_dispatch(Term *t, char final) {
     case 'u':
         if (t->save_valid) { move_to(t, t->save_cx, t->save_cy); t->pen = t->save_pen; }
         break;
-    case 't': break;
+    case 't': {
+        int cw = font_cell_w(), ch = font_cell_h();
+        if (p0 == 14) snprintf(buf, sizeof buf, "\033[4;%d;%dt", t->rows * ch, t->cols * cw);
+        else if (p0 == 16) snprintf(buf, sizeof buf, "\033[6;%d;%dt", ch, cw);
+        else if (p0 == 18) snprintf(buf, sizeof buf, "\033[8;%d;%dt", t->rows, t->cols);
+        else break;
+        reply(t, buf);
+        break;
+    }
     default: break;
     }
 }
@@ -670,8 +694,8 @@ static void exec_c0(Term *t, uint8_t c) {
         t->wrapnext = false;
         break;
     case 0x0d: t->cx = 0; t->wrapnext = false; t->cursor_moved = true; break;
-    case 0x0e: g0_graphics = true; break;
-    case 0x0f: g0_graphics = false; break;
+    case 0x0e: t->g0_graphics = true; break;
+    case 0x0f: t->g0_graphics = false; break;
     }
 }
 
@@ -718,7 +742,7 @@ void term_write(Term *t, const uint8_t *buf, size_t len) {
             if (c < 0x20 || c == 0x7f) { exec_c0(t, c); continue; }
             if (c < 0x80) {
                 uint32_t cp = c;
-                if (g0_graphics && c >= 0x60 && c <= 0x7e) cp = dec_graphics[c - 0x60];
+                if (t->g0_graphics && c >= 0x60 && c <= 0x7e) cp = dec_graphics[c - 0x60];
                 put_char(t, cp);
                 continue;
             }
@@ -740,7 +764,8 @@ void term_write(Term *t, const uint8_t *buf, size_t len) {
                 continue;
             }
             if (c == ']') { t->state = ST_OSC; t->osc_len = 0; continue; }
-            if (c == 'P' || c == 'X' || c == '^' || c == '_') { t->state = ST_STR_IGNORE; continue; }
+            if (c == '_') { t->state = ST_APC; gfx_apc_begin(); continue; }
+            if (c == 'P' || c == 'X' || c == '^') { t->state = ST_STR_IGNORE; continue; }
             if (c == '(' || c == ')' || c == '*' || c == '+') { t->state = ST_CHARSET; continue; }
             if (c == '#' || c == '%' || c == ' ') { t->state = ST_ESC_INTER; continue; }
             esc_dispatch(t, c);
@@ -752,7 +777,7 @@ void term_write(Term *t, const uint8_t *buf, size_t len) {
             continue;
 
         case ST_CHARSET:
-            g0_graphics = (c == '0');
+            t->g0_graphics = (c == '0');
             t->state = ST_GROUND;
             continue;
 
@@ -801,6 +826,23 @@ void term_write(Term *t, const uint8_t *buf, size_t len) {
             if (t->osc_len < OSC_MAX - 1) t->osc[t->osc_len++] = (char)c;
             continue;
 
+        case ST_APC: {
+            const uint8_t *end = buf + len, *p = buf + i;
+            while (p < end && *p != 0x1b && *p != 0x07) p++;
+            gfx_apc_put(buf + i, (size_t)(p - (buf + i)));
+            i = (size_t)(p - buf);
+            if (p == end) continue;
+            if (*p == 0x07) { gfx_apc_end(t); t->state = ST_GROUND; }
+            else t->state = ST_APC_ESC;
+            continue;
+        }
+
+        case ST_APC_ESC:
+            gfx_apc_end(t);
+            t->state = ST_GROUND;
+            if (c != '\\') { t->state = ST_ESC; t->csi_inter = 0; i--; }
+            continue;
+
         case ST_STR_IGNORE:
             if (c == 0x07) { t->state = ST_GROUND; continue; }
             if (c == 0x1b) {
@@ -829,6 +871,7 @@ void term_init(Term *t, int cols, int rows) {
         }
     }
 
+    gfx_reset();
     memset(t, 0, sizeof *t);
     t->ptyfd = ptyfd;
     t->cols = cols;
@@ -850,7 +893,7 @@ void term_init(Term *t, int cols, int rows) {
 
     erase_cells(t, t->main_buf, cols * rows);
     erase_cells(t, t->alt_buf, cols * rows);
-    g0_graphics = false;
+    t->g0_graphics = false;
 }
 
 void term_free(Term *t) {
@@ -899,6 +942,7 @@ void term_resize(Term *t, int cols, int rows) {
     t->pen = save;
 
     term_sel_clear(t);
+    gfx_resize(t, shift);
 
     if (t->sb) {
         free(t->sb);

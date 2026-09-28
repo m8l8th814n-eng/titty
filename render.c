@@ -10,9 +10,9 @@
 typedef struct { float x, y, w, h, r, g, b, a; } RectInst;
 typedef struct { float x, y, w, h, u0, v0, u1, v1, r, g, b, a, col, pad0, pad1, pad2; } GlyphInst;
 
-static GLuint prog_rect, prog_glyph, prog_poly, prog_bright, prog_blur, prog_post;
+static GLuint prog_rect, prog_glyph, prog_poly, prog_bright, prog_blur, prog_post, prog_img;
 static bool subpixel;
-static GLuint vao_rect, vao_glyph, vao_poly, vao_empty;
+static GLuint vao_rect, vao_glyph, vao_poly, vao_img, vao_empty;
 static GLuint vbo_quad, vbo_rect, vbo_glyph, vbo_poly;
 static GLuint fbo_scene, tex_scene;
 static GLuint fbo_bloom[2], tex_bloom[2];
@@ -60,6 +60,27 @@ static const char *FS_RECT =
 "in vec4 vColor;\n"
 "out vec4 oColor;\n"
 "void main(){ oColor = vColor; }\n";
+
+static const char *VS_IMG =
+"#version 300 es\n"
+"layout(location=0) in vec2 aCorner;\n"
+"uniform vec4 uRect;\n"
+"uniform vec4 uUV;\n"
+"uniform vec2 uRes;\n"
+"out vec2 vUV;\n"
+"void main(){\n"
+" vec2 p = uRect.xy + aCorner * uRect.zw;\n"
+" vUV = mix(uUV.xy, uUV.zw, aCorner);\n"
+" gl_Position = vec4(p.x/uRes.x*2.0-1.0, 1.0-p.y/uRes.y*2.0, 0.0, 1.0);\n"
+"}\n";
+
+static const char *FS_IMG =
+"#version 300 es\n"
+"precision highp float;\n"
+"in vec2 vUV;\n"
+"uniform sampler2D uTex;\n"
+"out vec4 oColor;\n"
+"void main(){ oColor = texture(uTex, vUV); }\n";
 
 static const char *VS_GLYPH =
 "#version 300 es\n"
@@ -387,7 +408,7 @@ static GLuint compile(GLenum type, const char *src) {
             fputs(src, f);
             fclose(f);
         }
-        fprintf(stderr, "titty: shader compile failed:\n%s\nkälla: /tmp/titty-shader-error.glsl\n", log);
+        fprintf(stderr, "titty: shader compile failed:\n%s\nsource: /tmp/titty-shader-error.glsl\n", log);
         exit(1);
     }
     return s;
@@ -644,6 +665,8 @@ static void make_fbo(GLuint *fbo, GLuint *tex, int w, int h) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindFramebuffer(GL_FRAMEBUFFER, *fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *tex, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        fprintf(stderr, "titty: warning: framebuffer incomplete (%dx%d)\n", w, h);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -662,6 +685,7 @@ bool render_init(void) {
     prog_rect = link_prog(VS_RECT, FS_RECT);
     prog_glyph = link_prog(VS_GLYPH, fsg);
     prog_poly = link_prog(VS_POLY, FS_POLY);
+    prog_img = link_prog(VS_IMG, FS_IMG);
     char fsb[1536];
     snprintf(fsb, sizeof fsb, FS_BRIGHT_FMT,
              (double)FX_GLOW_FALLOFF, (double)FX_GLOW_TINT,
@@ -716,6 +740,12 @@ bool render_init(void) {
     glGenVertexArrays(1, &vao_poly);
     glBindVertexArray(vao_poly);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_poly);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glGenVertexArrays(1, &vao_img);
+    glBindVertexArray(vao_img);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_quad);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
@@ -853,6 +883,73 @@ static void draw_glyphs(void) {
     glyph_n = 0;
     if (subpixel)
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+void render_free_tex(unsigned tex) {
+    GLuint id = tex;
+    glDeleteTextures(1, &id);
+}
+
+static bool upload_image(GfxImage *im) {
+    GLint max = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max);
+    if (im->w > max || im->h > max) return false;
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, im->w, im->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, im->rgba);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    im->tex = tex;
+    free(im->rgba);
+    im->rgba = NULL;
+    return true;
+}
+
+static void draw_images(Term *t, int ox, int oy, int cw, int chh, bool under) {
+    const GfxPlace *pl;
+    int n = gfx_placements(&pl);
+    bool setup = false;
+    for (int k = 0; k < n; k++) {
+        const GfxPlace *p = &pl[k];
+        if (p->alt != t->alt || (p->z < 0) != under) continue;
+        int vy = p->row + t->scroll_off;
+        if (vy >= t->rows || vy + p->rows <= 0) continue;
+        GfxImage *im = gfx_image(p->img);
+        if (!im || (!im->tex && (!im->rgba || !upload_image(im)))) continue;
+
+        if (!setup) {
+            setup = true;
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(ox, fb_h - (oy + t->rows * chh), t->cols * cw, t->rows * chh);
+            glUseProgram(prog_img);
+            glUniform2f(glGetUniformLocation(prog_img, "uRes"), (float)fb_w, (float)fb_h);
+            glUniform1i(glGetUniformLocation(prog_img, "uTex"), 0);
+            glActiveTexture(GL_TEXTURE0);
+            glBindVertexArray(vao_img);
+        }
+        float x = (float)(ox + p->col * cw + p->ox);
+        float y = (float)(oy + vy * chh + p->oy);
+        float w = p->fit ? (float)(p->cols * cw - p->ox) : (float)p->sw;
+        float h = p->fit ? (float)(p->rows * chh - p->oy) : (float)p->sh;
+        glUniform4f(glGetUniformLocation(prog_img, "uRect"), x, y, w, h);
+        glUniform4f(glGetUniformLocation(prog_img, "uUV"),
+                    (float)p->sx / im->w, (float)p->sy / im->h,
+                    (float)(p->sx + p->sw) / im->w, (float)(p->sy + p->sh) / im->h);
+        glBindTexture(GL_TEXTURE_2D, im->tex);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+    if (setup) {
+        glDisable(GL_SCISSOR_TEST);
+        if (under) glDisable(GL_BLEND);
+    }
 }
 
 static void draw_poly(const float *c, float alpha) {
@@ -1032,6 +1129,7 @@ void render_frame(Term *t, double now, bool focused) {
         }
     }
     draw_rects();
+    draw_images(t, ox, oy, cw, chh, true);
 
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -1116,6 +1214,7 @@ void render_frame(Term *t, double now, bool focused) {
         }
     }
     draw_glyphs();
+    draw_images(t, ox, oy, cw, chh, false);
 
     glDisable(GL_BLEND);
 

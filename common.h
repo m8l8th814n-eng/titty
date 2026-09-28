@@ -72,6 +72,7 @@ typedef struct {
     bool reverse_video;
     bool focus_events;
     int cursor_shape;
+    bool g0_graphics;
 
     Cell *sb;
     int sb_cap;
@@ -121,6 +122,36 @@ const Cell *term_abs_line(Term *t, int abs_row);
 const Cell *term_line(Term *t, int y);
 static inline Cell *term_cell(Term *t, int x, int y) { return &t->screen[y * t->cols + x]; }
 
+void term_image_advance(Term *t, int cols, int rows);
+
+typedef struct {
+    uint32_t id, number;
+    int w, h;
+    uint8_t *rgba;
+    unsigned tex;
+    size_t bytes;
+    uint64_t seq;
+} GfxImage;
+
+typedef struct {
+    uint32_t img, pid;
+    int col, row, cols, rows;
+    int sx, sy, sw, sh;
+    int ox, oy;
+    int z;
+    bool alt, fit;
+} GfxPlace;
+
+void gfx_apc_begin(void);
+void gfx_apc_put(const uint8_t *p, size_t n);
+void gfx_apc_end(Term *t);
+void gfx_scroll(Term *t, int top, int bot, int n);
+void gfx_clear(Term *t, bool alt);
+void gfx_resize(Term *t, int shift);
+void gfx_reset(void);
+int gfx_placements(const GfxPlace **out);
+GfxImage *gfx_image(uint32_t id);
+
 int pty_spawn(int cols, int rows, char *const argv[]);
 void pty_resize(int fd, int cols, int rows, int px, int py);
 
@@ -159,6 +190,7 @@ bool render_animating(void);
 void render_bell(double now);
 void render_toggle_fx(void);
 bool render_fx_on(void);
+void render_free_tex(unsigned tex);
 
 typedef struct {
     int width, height;

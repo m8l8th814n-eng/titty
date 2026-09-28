@@ -105,6 +105,9 @@ int pty_spawn(int cols, int rows, char *const argv[]) {
         setenv("TERM", TERM_NAME, 1);
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM_PROGRAM", "titty", 1);
+        char kpid[16];
+        snprintf(kpid, sizeof kpid, "%d", (int)getppid());
+        setenv("KITTY_PID", kpid, 1);
         unsetenv("LINES");
         unsetenv("COLUMNS");
 
@@ -118,7 +121,7 @@ int pty_spawn(int cols, int rows, char *const argv[]) {
 
         if (argv && argv[0]) {
             execvp(argv[0], argv);
-            fprintf(stderr, "titty: exec %s: %s\r\n", argv[0], strerror(errno));
+            dprintf(master, "titty: exec %s: %s\r\n", argv[0], strerror(errno));
         } else {
             const char *sh = pick_shell();
             const char *base = strrchr(sh, '/');
@@ -126,7 +129,7 @@ int pty_spawn(int cols, int rows, char *const argv[]) {
             snprintf(arg0, sizeof arg0, "-%s", base ? base + 1 : sh);
             char *sargv[] = { arg0, NULL };
             execv(sh, sargv);
-            fprintf(stderr, "titty: exec %s: %s\r\n", sh, strerror(errno));
+            dprintf(master, "titty: exec %s: %s\r\n", sh, strerror(errno));
         }
         _exit(127);
     }

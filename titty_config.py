@@ -68,8 +68,8 @@ def patch_header(path, values, dry_run=False):
 
 def report(changed, path, dry_run):
     if not changed:
-        print('%s: inga ändringar' % path)
+        print('%s: no changes' % path)
         return
     for name, old, new in changed:
         print('  %-18s %-22s -> %s' % (name, old, new))
-    print('%s: %d värden %s' % (path, len(changed), 'skulle ändras' if dry_run else 'uppdaterade'))
+    print('%s: %d values %s' % (path, len(changed), 'would change' if dry_run else 'updated'))

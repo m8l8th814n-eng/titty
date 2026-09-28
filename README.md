@@ -1,16 +1,21 @@
-tiTTY tErmiNaL 
+### tiTTY tErmiNaL 
 
-suck less than kitty but way cooler. thIS iS yOur nEw G0At.
+## suck less than kitty but way cooler.
 
-light robust optimized.
+# fast light fast robust fast optimized and FAST.
 
+# Suports chafa brilliant.
+
+# clone it build it install it. 
 git clone https://github.com/m8l8th814n-eng/titty
 
 bat Makefile
 
+# make. use make demo to build all variants at the same.
 make 
+# (copy to /usr/local/bin)
 make install
-
+# run it.
 titty
-
-ctrl+shift+F (bat shit mode)
+# press.
+ctrl+shift+F (FX on/off off/on)

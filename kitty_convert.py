@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Konvertera en kitty.conf (färger, tema, inner border, cursor trail, font) till titty.h."""
+"""Convert a kitty.conf (colors, theme, inner border, cursor trail, font) to titty.h."""
 
 import argparse
 import os
@@ -17,7 +17,7 @@ FONT_SLOTS = (('font_family', 'FONT_REGULAR', 'Regular'),
 
 
 def read_conf(path, seen=None):
-    """kitty.conf är 'nyckel värde' per rad, med include/globinclude."""
+    """kitty.conf is 'key value' per line, with include/globinclude."""
     seen = seen if seen is not None else set()
     real = os.path.realpath(path)
     if real in seen:
@@ -45,7 +45,7 @@ def read_conf(path, seen=None):
                 elif os.path.exists(p):
                     entries += read_conf(p, seen)
                 else:
-                    sys.stderr.write('warning: include saknas: %s\n' % p)
+                    sys.stderr.write('warning: missing include: %s\\n' % p)
                 continue
 
             entries.append((key, val))
@@ -60,7 +60,7 @@ def to_dict(entries):
 
 
 def parse_font(val, fallback_style):
-    """kitty accepterar både 'Family Name' och 'family="X" style=Y'."""
+    """kitty accepts both 'Family Name' and 'family="X" style=Y'."""
     if not val or val.lower() in ('auto', 'monospace'):
         return None, None
     if '=' in val and re.search(r'\b(family|style|postscript_name)\s*=', val):
@@ -80,7 +80,7 @@ def parse_font(val, fallback_style):
 
 
 def parse_padding(val):
-    """window_padding_width: en, två eller fyra tal."""
+    """window_padding_width: one, two or four numbers."""
     nums = [float(x) for x in val.replace(',', ' ').split() if x]
     if not nums:
         return None
@@ -195,26 +195,26 @@ def convert(conf, want_font=True, want_colors=True, want_window=True, want_trail
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Konvertera kitty.conf till titty.h')
-    ap.add_argument('config', nargs='+', help='kitty.conf och/eller temafiler (senare fil vinner)')
-    ap.add_argument('-o', '--output', default=None, help='titty.h att uppdatera')
+    ap = argparse.ArgumentParser(description='Convert kitty.conf to titty.h')
+    ap.add_argument('config', nargs='+', help='kitty.conf and/or theme files (later file wins)')
+    ap.add_argument('-o', '--output', default=None, help='titty.h to update')
     ap.add_argument('--colors-only', action='store_true')
     ap.add_argument('--font-only', action='store_true')
     ap.add_argument('--no-window', action='store_true',
-                    help='hoppa över padding/opacitet/fönsterstorlek')
-    ap.add_argument('--no-trail', action='store_true', help='rör inte cursor trail')
+                    help='skip padding/opacity/window size')
+    ap.add_argument('--no-trail', action='store_true', help='do not touch cursor trail')
     ap.add_argument('-n', '--dry-run', action='store_true')
     args = ap.parse_args()
 
     out = args.output or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'titty.h')
     if not os.path.exists(out):
-        sys.exit('hittar inte %s' % out)
+        sys.exit('not found: %s' % out)
 
     entries = []
     for path in args.config:
         p = os.path.expanduser(path)
         if not os.path.exists(p):
-            sys.exit('hittar inte %s' % p)
+            sys.exit('not found: %s' % p)
         entries += read_conf(p)
 
     values = convert(to_dict(entries),
@@ -223,11 +223,11 @@ def main():
                      want_window=not args.no_window,
                      want_trail=not args.no_trail)
     if not values:
-        sys.exit('inget att konvertera i angivna filer')
+        sys.exit('nothing to convert in given files')
 
     report(patch_header(out, values, args.dry_run), out, args.dry_run)
     if not args.dry_run:
-        print('kör `make` för att bygga om')
+        print('run `make` to rebuild')
 
 
 if __name__ == '__main__':
